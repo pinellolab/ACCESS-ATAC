@@ -28,8 +28,6 @@ def parse_args():
     parser.add_argument("--bed_file", type=str, default=None)
     parser.add_argument("--extend_size", type=int, default=0)
     parser.add_argument("--skip_rows", type=int, default=0)
-    parser.add_argument("--forward_shift", type=int, default=4)
-    parser.add_argument("--reverse_shift", type=int, default=5)
     parser.add_argument("--normalize", type=bool, default=False)
     parser.add_argument("--out_dir", type=str, default=None)
     parser.add_argument("--out_name", type=str, default=None)
@@ -185,8 +183,6 @@ def collapse_consecutive_values(
 def fragments_to_coverage(
     df_fragments: pl.DataFrame,
     chrom_sizes: dict[str, int],
-    forward_shift: int = 4,
-    reverse_shift: int = 5,
     normalize: bool = False,
     scaling_factor: float = 1.0,
     extend_cut_sites: int = 0,
@@ -209,6 +205,9 @@ def fragments_to_coverage(
     scaling_factor :
         A scaling factor to apply to the signal values. Only used if `normalize` is True.
         Default is 1.0.
+    cut_sites:
+        Use 1 bp Tn5 cut sites (start and end of each fragment) instead of whole
+        fragment length for coverage calculation.
     extend_cut_sites:
         If set cut_sites, expand cut sites for both upstream and downstream, by default: 0
 
@@ -250,18 +249,17 @@ def fragments_to_coverage(
             logging.warning(f"Skipping {chrom} as it is not in chrom sizes file.")
             continue
 
-        starts, ends = per_chrom_fragments_dfs[chrom].select(["start", "end"]).to_numpy().T
+        edit_positions = per_chrom_fragments_dfs[chrom]["edit_positions"].to_list()
+        # edit_positions = edit_positions[:10]  # for testing
+        starts, ends = [], []
+        for edit_position in edit_positions:
+            for pos in edit_position.split("|"):
+                pos = int(pos)
+                starts.append(pos - extend_cut_sites)
+                ends.append(pos + extend_cut_sites + 1)
 
-        # shift cut sites
-        for i in range(len(starts)):
-            starts[i] += forward_shift
-            ends[i] += -reverse_shift
-
-        # Create cut site positions (for both start and end of a fragment).
-        starts, ends = (
-            np.hstack((starts - extend_cut_sites, ends - extend_cut_sites - 1)),
-            np.hstack((starts + extend_cut_sites + 1, ends + extend_cut_sites)),
-        )
+        starts = np.array(starts)
+        ends = np.array(ends)
 
         chrom_arrays[chrom] = calculate_depth(chrom_sizes[chrom], starts, ends)
         n_fragments += per_chrom_fragments_dfs[chrom].height
@@ -319,33 +317,23 @@ def main():
         use_pyarrow=False,
     )
 
-    # rename columns based number of columns
-    if df_fragments.width == 3: # for ATAC-seq
-        df_fragments = df_fragments.rename(
-            {
-                df_fragments.columns[0]: "chrom",
-                df_fragments.columns[1]: "start",
-                df_fragments.columns[2]: "end",
-            }
-        )
-    elif df_fragments.width == 4: # for ACCESS-ATAC-seq
-        df_fragments = df_fragments.rename(
-            {
-                df_fragments.columns[0]: "chrom",
-                df_fragments.columns[1]: "start",
-                df_fragments.columns[2]: "end",
-                df_fragments.columns[3]: "edit_positions",
-            }
-        )
+    df_fragments = df_fragments.rename(
+        {
+            df_fragments.columns[0]: "chrom",
+            df_fragments.columns[1]: "start",
+            df_fragments.columns[2]: "end",
+            df_fragments.columns[3]: "edit_positions",
+        }
+    )
 
-    print(df_fragments.head())
+    # remove rows then edit_positions is empty
+    df_fragments = df_fragments.filter(pl.col("edit_positions").is_not_null())
 
     # subset df_fragments to have the same Chromosome as in grs
     gr_chroms = set(grs.Chromosome.tolist())
     df_fragments = df_fragments.filter(pl.col("chrom").is_in(gr_chroms))
 
     logging.info(f"Number of fragments: {df_fragments.height}")
-
     logging.info(f"Generating bigwig file in {args.out_dir}")
 
     if args.normalize:

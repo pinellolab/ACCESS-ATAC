@@ -13,7 +13,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 # from model import MaxATACCNN
-from model import ACCESSNet
+from model_v2 import AccNet
 from utils import set_seed
 from dataset import get_dataloader
 
@@ -31,11 +31,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     # Required parameters
-    parser.add_argument("--train_data", type=str, default=None)
-    parser.add_argument("--valid_data", type=str, default=None)
-    parser.add_argument("--test_data", type=str, default=None)
-    parser.add_argument("--assay", type=str, default=None)
-    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--data", type=str, default=None)
+    parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--cuda", type=int, default=0)
     parser.add_argument("--batch_size", type=int, default=48)
@@ -47,34 +44,13 @@ def parse_args():
     return parser.parse_args()
 
 
-def train(model, dataloader, criterion, optimizer, device, assay: str = "seq"):
+def train(model, dataloader, criterion, optimizer, device):
     model.train()
 
     train_loss = 0.0
-    for data in dataloader:
-        seq = data['seq']
-        atac_signal = data['atac_signal']
-        atac_bias = data['atac_bias']
-        access_signal = data['access_signal']
-        access_bias = data['access_bias']
-        target = data['label']
-
-        if assay == "seq":
-            pred = model(seq.to(device)).view(-1)
-        elif assay == "atac":
-            pred = model(seq.to(device), atac_signal.to(device), atac_bias.to(device)).view(-1)
-        elif assay == "access":
-            pred = model(seq.to(device), access_signal.to(device), access_bias.to(device)).view(-1)
-        elif assay == "both":
-            pred = model(seq.to(device),
-                         atac_signal.to(device),
-                         atac_bias.to(device),
-                         access_signal.to(device),
-                         access_bias.to(device)).view(-1)
-        else:
-            raise ValueError(f"Unsupported assay type: {assay}")
-        
-        loss = criterion(pred.float(), target.to(device).float())
+    for x, y in dataloader:
+        pred = model(x.to(device)).view(-1)
+        loss = criterion(pred.float(), y.to(device).float())
 
         optimizer.zero_grad()
         loss.backward()
@@ -85,65 +61,26 @@ def train(model, dataloader, criterion, optimizer, device, assay: str = "seq"):
     return train_loss
 
 
-def valid(model, dataloader, criterion, device, assay: str = "seq"):
+def valid(model, dataloader, criterion, device):
     model.eval()
 
     valid_loss = 0.0
-    for data in dataloader:
-        seq = data['seq']
-        atac_signal = data['atac_signal']
-        atac_bias = data['atac_bias']
-        access_signal = data['access_signal']
-        access_bias = data['access_bias']
-        target = data['label']
-
-        if assay == "seq":
-            pred = model(seq.to(device)).view(-1)
-        elif assay == "atac":
-            pred = model(seq.to(device), atac_signal.to(device), atac_bias.to(device)).view(-1)
-        elif assay == "access":
-            pred = model(seq.to(device), access_signal.to(device), access_bias.to(device)).view(-1)
-        elif assay == "both":
-            pred = model(seq.to(device),
-                         atac_signal.to(device),
-                         atac_bias.to(device),
-                         access_signal.to(device),
-                         access_bias.to(device)).view(-1)
-        else:
-            raise ValueError(f"Unsupported assay type: {assay}")
-        loss = criterion(pred.float(), target.to(device).float())
+    for x, y in dataloader:
+        pred = model(x.to(device)).view(-1)
+        loss = criterion(pred.float(), y.to(device).float())
 
         valid_loss += loss.item() / len(dataloader)
 
     return valid_loss
 
 
-def predict(model, dataloader, device, assay: str = "seq"):
+def predict(model, dataloader, device):
     model.eval()
 
     preds = []
     with torch.no_grad():
-        for data in dataloader:
-            seq = data['seq']
-            atac_signal = data['atac_signal']
-            atac_bias = data['atac_bias']
-            access_signal = data['access_signal']
-            access_bias = data['access_bias']
-
-            if assay == "seq":
-                pred = model(seq.to(device)).view(-1)
-            elif assay == "atac":
-                pred = model(seq.to(device), atac_signal.to(device), atac_bias.to(device)).view(-1)
-            elif assay == "access":
-                pred = model(seq.to(device), access_signal.to(device), access_bias.to(device)).view(-1)
-            elif assay == "both":
-                pred = model(seq.to(device),
-                             atac_signal.to(device),
-                             atac_bias.to(device),
-                             access_signal.to(device),
-                             access_bias.to(device)).view(-1)
-            else:
-                raise ValueError(f"Unsupported assay type: {assay}")
+        for x in dataloader:
+            pred = model(x.to(device)).view(-1)
             preds.append(pred.cpu().numpy())
 
     preds = np.concatenate(preds, axis=0)
@@ -157,47 +94,41 @@ def main():
     set_seed(args.seed)
 
     logging.info("Loading input files")
-    train_data = np.load(args.train_data)
-    valid_data = np.load(args.valid_data)
-    test_data = np.load(args.test_data)
+    data = np.load(args.data)
 
     train_dataloader = get_dataloader(
-        seq=train_data['seq'],
-        atac_signal=train_data['signal_atac'],
-        atac_bias=train_data['bias_atac'],
-        access_signal=train_data['signal_access'],
-        access_bias=train_data['bias_access'],
-        label=train_data['label'],
+        x=data['train_x'],
+        y=data['train_y'],
         batch_size=args.batch_size,
         drop_last=True,
         shuffle=True,
+        train=True,
     )
     valid_dataloader = get_dataloader(
-        seq=valid_data['seq'],
-        atac_signal=valid_data['signal_atac'],
-        atac_bias=valid_data['bias_atac'],
-        access_signal=valid_data['signal_access'],
-        access_bias=valid_data['bias_access'],
-        label=valid_data['label'],
+        x=data['valid_x'],
+        y=data['valid_y'],
         batch_size=args.batch_size,
         drop_last=False,
         shuffle=False,
+        train=True,
     )
 
     test_dataloader = get_dataloader(
-        seq=test_data['seq'],
-        atac_signal=test_data['signal_atac'],
-        atac_bias=test_data['bias_atac'],
-        access_signal=test_data['signal_access'],
-        access_bias=test_data['bias_access'],
-        label=test_data['label'],
+        x=data['test_x'],
+        y=data['test_y'],
         batch_size=args.batch_size,
         drop_last=False,
         shuffle=False,
+        train=False,
     )
 
     # Setup model
-    model = ACCESSNet(peak_len=256)
+    logging.info(f"Input channels: {data['train_x'].shape[2]}")
+    model = AccNet(in_ch=data['train_x'].shape[2], n_blocks=3)
+
+    logging.info(f"training data size: {len(data['train_x'])}")
+    logging.info(f"validation data size: {len(data['valid_x'])}")
+    logging.info(f"test data size: {len(data['test_x'])}")
 
     device = torch.device(f"cuda:{args.cuda}")
     model.to(device)
@@ -219,14 +150,9 @@ def main():
             criterion=criterion,
             optimizer=optimizer,
             device=device,
-            assay=args.assay
         )
         valid_loss = valid(
-            dataloader=valid_dataloader, 
-            model=model, 
-            criterion=criterion, 
-            device=device,
-            assay=args.assay
+            dataloader=valid_dataloader, model=model, criterion=criterion, device=device
         )
 
         # save model if find a better validation score
@@ -280,21 +206,18 @@ def main():
     model.load_state_dict(state["state_dict"])
 
     test_preds = predict(
-        dataloader=test_dataloader, 
-        model=model, 
-        device=device,
-        assay=args.assay
+        dataloader=test_dataloader, model=model, device=device
     )
 
     # save test true labels and predictions
     test_df = pd.DataFrame(data={
-        "true": test_data['label'],
+        "true": data['test_y'],
         "pred": test_preds,
     })
     test_df.to_csv(f"{args.pred_dir}/{args.out_name}.csv", index=False)
 
     # plot AUPR curve for test set
-    precision, recall, _ = precision_recall_curve(test_data['label'], test_preds)
+    precision, recall, _ = precision_recall_curve(data['test_y'], test_preds)
     aupr = auc(recall, precision)
     logging.info(f"AUPR: {aupr:.5f}")
 

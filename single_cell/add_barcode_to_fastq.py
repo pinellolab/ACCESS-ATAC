@@ -4,6 +4,7 @@ import argparse
 import logging
 import warnings
 import gzip
+import pandas as pd
 
 warnings.filterwarnings("ignore")
 
@@ -22,6 +23,7 @@ def parse_args():
     # Required parameters
     parser.add_argument("--reads_fastq", type=str, default=None)
     parser.add_argument("--barcodes_fastq", type=str, default=None)
+    parser.add_argument("--corrected_barcodes", type=str, default=None)
     parser.add_argument("--out_dir", type=str, default=None)
     parser.add_argument("--out_name", type=str, default=None)
     return parser.parse_args()
@@ -30,6 +32,13 @@ def main():
     args = parse_args()
 
     output_fastq = f"{args.out_dir}/{args.out_name}.fastq.gz"
+
+    barcode_map = None
+    if args.corrected_barcodes is not None:
+        logging.info(f"Loading corrected barcodes from {args.corrected_barcodes}")
+        df_barcodes = pd.read_csv(args.corrected_barcodes, sep="\t", header=None, names=["original_barcode", "corrected_barcode"])
+        barcode_map = dict(zip(df_barcodes['original_barcode'], 
+                               df_barcodes['corrected_barcode']))
 
     logging.info(f"Adding barcodes to fastq file {args.reads_fastq} using barcodes from {args.barcodes_fastq}")
     # read barcodes from the fastq file
@@ -62,6 +71,8 @@ def main():
 
             # Extract barcode sequence
             barcode = bc_seq.strip()
+            if barcode_map is not None:
+                barcode = barcode_map.get(barcode, barcode)
 
             # Modify the read header (line 0)
             header = header.strip().split(" ")[0]

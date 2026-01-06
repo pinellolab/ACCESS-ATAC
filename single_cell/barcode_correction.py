@@ -150,7 +150,7 @@ def decide_correction_for_one_barcode(
     for bc, pos in candidates:
         prior = prior_counts.get(bc, 0) + 1  # add-1 smoothing
         err_p = phred_error_prob(qual[pos])
-        score = prior * err_p
+        score = prior * (err_p / 3.0)  # divide by 3 for substitution
         scores.append((bc, score))
 
     total_score = sum(s for _, s in scores)

@@ -362,6 +362,8 @@ def main():
             df_fragments=df_fragments,
             chrom_sizes=chrom_sizes,
             normalize=args.normalize,
+            forward_shift=args.forward_shift,
+            reverse_shift=args.reverse_shift,
             scaling_factor=1.0,
             extend_cut_sites=args.extend_size,
         )

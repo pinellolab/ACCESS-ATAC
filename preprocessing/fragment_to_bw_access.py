@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument("--bed_file", type=str, default=None)
     parser.add_argument("--extend_size", type=int, default=0)
     parser.add_argument("--skip_rows", type=int, default=0)
-    parser.add_argument("--normalize", type=bool, default=False)
+    parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--out_dir", type=str, default=None)
     parser.add_argument("--out_name", type=str, default=None)
     parser.add_argument("--chrom_size_file", type=str, default=None)
@@ -317,17 +317,32 @@ def main():
         use_pyarrow=False,
     )
 
+    df_fragments = df_fragments.select(pl.col(["column_1", "column_2", "column_3", 
+                                               "column_4", "column_5", "column_6"]))
+
+    print(df_fragments.head())
+
     df_fragments = df_fragments.rename(
         {
             df_fragments.columns[0]: "chrom",
             df_fragments.columns[1]: "start",
             df_fragments.columns[2]: "end",
-            df_fragments.columns[3]: "edit_positions",
+            df_fragments.columns[3]: "cell_barcode",
+            df_fragments.columns[4]: "replicates",
+            df_fragments.columns[5]: "edit_positions",
         }
     )
 
     # remove rows then edit_positions is empty
     df_fragments = df_fragments.filter(pl.col("edit_positions").is_not_null())
+
+    df_fragments = df_fragments.filter(
+        pl.col("edit_positions")
+        .str.strip_chars()
+        .str.to_lowercase()
+        .ne("none")
+    )
+
 
     # subset df_fragments to have the same Chromosome as in grs
     gr_chroms = set(grs.Chromosome.tolist())

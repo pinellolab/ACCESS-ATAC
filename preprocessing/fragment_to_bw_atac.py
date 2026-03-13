@@ -30,7 +30,7 @@ def parse_args():
     parser.add_argument("--skip_rows", type=int, default=0)
     parser.add_argument("--forward_shift", type=int, default=4)
     parser.add_argument("--reverse_shift", type=int, default=5)
-    parser.add_argument("--normalize", type=bool, default=False)
+    parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--out_dir", type=str, default=None)
     parser.add_argument("--out_name", type=str, default=None)
     parser.add_argument("--chrom_size_file", type=str, default=None)
@@ -319,26 +319,62 @@ def main():
         use_pyarrow=False,
     )
 
-    # rename columns based number of columns
-    if df_fragments.width == 3: # for ATAC-seq
-        df_fragments = df_fragments.rename(
-            {
-                df_fragments.columns[0]: "chrom",
-                df_fragments.columns[1]: "start",
-                df_fragments.columns[2]: "end",
-            }
-        )
-    elif df_fragments.width == 4: # for ACCESS-ATAC-seq
-        df_fragments = df_fragments.rename(
-            {
-                df_fragments.columns[0]: "chrom",
-                df_fragments.columns[1]: "start",
-                df_fragments.columns[2]: "end",
-                df_fragments.columns[3]: "edit_positions",
-            }
-        )
-
     print(df_fragments.head())
+
+    # select first three columns
+    df_fragments = df_fragments.select(pl.col(["column_1", "column_2", "column_3"]))
+    df_fragments = df_fragments.rename(
+            {
+                df_fragments.columns[0]: "chrom",
+                df_fragments.columns[1]: "start",
+                df_fragments.columns[2]: "end",
+            }
+        )
+    
+    print(df_fragments.head())
+
+    # # rename columns based number of columns
+    # if df_fragments.width == 3: # for ATAC-seq
+    #     df_fragments = df_fragments.rename(
+    #         {
+    #             df_fragments.columns[0]: "chrom",
+    #             df_fragments.columns[1]: "start",
+    #             df_fragments.columns[2]: "end",
+    #         }
+    #     )
+    # elif df_fragments.width == 4: # for ACCESS-ATAC-seq
+    #     df_fragments = df_fragments.rename(
+    #         {
+    #             df_fragments.columns[0]: "chrom",
+    #             df_fragments.columns[1]: "start",
+    #             df_fragments.columns[2]: "end",
+    #             df_fragments.columns[3]: "edit_positions",
+    #         }
+    #     )
+    # elif df_fragments.width == 5: # for ACCESS-ATAC-seq with cell barcodes
+    #     df_fragments = df_fragments.rename(
+    #         {
+    #             df_fragments.columns[0]: "chrom",
+    #             df_fragments.columns[1]: "start",
+    #             df_fragments.columns[2]: "end",
+    #             df_fragments.columns[3]: "cell_barcode",
+    #             df_fragments.columns[4]: "replicate",
+    #         }
+    #     )
+
+    # elif df_fragments.width == 6: # for ACCESS-ATAC-seq with cell barcodes
+    #     df_fragments = df_fragments.rename(
+    #         {
+    #             df_fragments.columns[0]: "chrom",
+    #             df_fragments.columns[1]: "start",
+    #             df_fragments.columns[2]: "end",
+    #             df_fragments.columns[3]: "cell_barcode",
+    #             df_fragments.columns[4]: "replicate",
+    #             df_fragments.columns[5]: "edit_positions",
+    #         }
+    #     )
+
+    # print(df_fragments.head())
 
     # subset df_fragments to have the same Chromosome as in grs
     gr_chroms = set(grs.Chromosome.tolist())

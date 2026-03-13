@@ -20,7 +20,7 @@ def parse_args():
 
     # Required parameters
     parser.add_argument("--bam_file", type=str, default=None)
-    parser.add_argument("--fastq", type=str, default=None)
+    parser.add_argument("--barcode_file", type=str, default=None)
     parser.add_argument("--corrected_barcode", type=str, default=None)
     parser.add_argument("--bc_tag", type=str, default="CB")
     parser.add_argument("--out_dir", type=str, default=None)
@@ -38,48 +38,41 @@ def main():
         barcode_dict = dict(zip(df[0], df[1]))
         logging.info(f"Loaded {len(barcode_dict)} corrected barcodes")
 
-    for k, v in list(barcode_dict.items())[:10]:
-        print(k, v)
-
     # read sequence fastq to get original barcodes
     logging.info("Reading fastq file to get original barcodes")
     fastq_barcodes = {}
-    with pysam.FastxFile(args.fastq) as fq:
+    with pysam.FastxFile(args.barcode_file) as fq:
         for entry in fq:
             read_name = entry.name.split(" ")[0]
             barcode = entry.sequence
             fastq_barcodes[read_name] = barcode
-    logging.info(f"Loaded {len(fastq_barcodes)} barcodes from fastq")
-
-    # print a few barcodes for debugging
-    for k, v in list(fastq_barcodes.items())[:10]:
-        print(k, v)
+    logging.info(f"Loaded {len(fastq_barcodes)} reads from fastq")
 
     # add barcode to bam file
-    # logging.info("Adding barcode to bam file")
-    # infile = pysam.AlignmentFile(args.bam_file, "rb")
-    # outfile = pysam.AlignmentFile(
-    #     f"{args.out_dir}/{args.out_name}.bam", "wb", template=infile
-    # )
+    logging.info("Adding barcode to bam file")
+    infile = pysam.AlignmentFile(args.bam_file, "rb")
+    outfile = pysam.AlignmentFile(
+        f"{args.out_dir}/{args.out_name}.bam", "wb", template=infile
+    )
     
-    # # iter = infile.fetch(until_eof=True)
-    # # for read in iter:
-    # #     read_name = read.query_name
-    # #     # Get original barcode from fastq
-    # #     original_barcode = fastq_barcodes.get(read_name, None)
-    # #     if original_barcode is not None:
-    # #         barcode = original_barcode
-    # #         # Correct barcode if correction file is provided
-    # #         if barcode_dict and barcode in barcode_dict:
-    # #             barcode = barcode_dict[barcode]
+    iter = infile.fetch(until_eof=True)
+    for read in iter:
+        read_name = read.query_name
+        # Get original barcode from fastq
+        original_barcode = fastq_barcodes.get(read_name, None)
+        if original_barcode is not None:
+            barcode = original_barcode
+            # Correct barcode if correction file is provided
+            if barcode_dict and barcode in barcode_dict:
+                barcode = barcode_dict[barcode]
 
-    # #         # Set the barcode tag
-    # #         read.set_tag(args.bc_tag, barcode, replace=False)
-    # #         outfile.write(read)
+            # Set the barcode tag
+            read.set_tag(args.bc_tag, barcode, replace=False)
+            outfile.write(read)
 
-    # # infile.close()
-    # # outfile.close()
-    # # logging.info("Done!")
+    infile.close()
+    outfile.close()
+    logging.info("Done!")
 
 
 if __name__ == "__main__":

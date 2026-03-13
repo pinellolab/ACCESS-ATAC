@@ -8,6 +8,9 @@ def parse_args():
     parser.add_argument("--out", "-o", required=True, help="Output fragments file (tsv or tsv.gz)")
     parser.add_argument("--cell-tag", default="CB", help="Tag name storing cell barcode (default: CB)")
     parser.add_argument("--min-mapq", type=int, default=30,help="Minimum MAPQ for both mates to be kept (default: 30)")
+    parser.add_argument("--add-access", action="store_true", 
+                        help="Whether to add ACCESS tag (default: False)")
+    parser.add_argument("--ref-fasta", help="Reference FASTA file for ACCESS tag computation")
     return parser.parse_args()
 
 def is_good_read_pair(
@@ -84,6 +87,41 @@ def is_good_read_pair(
 
     return True
 
+def get_access_signal(r1, r2, fasta) -> list[int]:
+    """
+    Compute ACCESS signal for a read pair based on DddSs edit sites.
+    Return a list of integers representing the ACCESS edit positions within the fragment.
+    """
+    access_sites = []
+    for read in [r1, r2]:
+        # refer_seq = read.get_reference_sequence().upper()
+        query_seq = read.query_sequence
+        pairs = read.get_aligned_pairs(with_seq=True)
+
+        # print(query_seq)
+        for query_pos, ref_pos, ref_base in pairs:
+            if ref_pos is None or query_pos is None:
+                continue
+
+            refer_base = fasta.fetch(read.reference_name, ref_pos, ref_pos + 1).upper()
+
+            # refer_base = refer_base.upper()
+            query_base = query_seq[query_pos]
+
+            edit_site = ref_pos  # convert to reference coordinate
+            # C -> T at forward strand
+            if refer_base == "C" and query_base == "T":
+                access_sites.append(edit_site)
+
+            # G -> A at reverse strand
+            elif refer_base == "G" and query_base == "A":
+                access_sites.append(edit_site)
+
+    # remove duplicates
+    access_sites = list(dict.fromkeys(access_sites))
+    access_sites.sort()
+
+    return access_sites
 
 def open_output(path):
     """
@@ -98,6 +136,10 @@ def main():
     args = parse_args()
 
     bam = pysam.AlignmentFile(args.bam, "rb")
+
+    if args.add_access:
+        fasta = pysam.FastaFile(args.ref_fasta)
+
     with open_output(args.out) as out:
         prev_read = None
         for read in bam:
@@ -105,6 +147,11 @@ def main():
             if prev_read is None:
                 prev_read = read
                 continue
+
+            # Debugging: process only one read name
+            # if read.query_name != "AV242502:multiSeq_Arbab-Sherwood-labs-9:2511508312:1:20103:5052:0307":
+            #     prev_read = None
+            #     continue
 
             if read.query_name != prev_read.query_name:
                 # Orphaned read; start new pair candidate with current read
@@ -152,7 +199,17 @@ def main():
                 prev_read = None
                 continue
 
-            out.write(f"{chrom}\t{frag_start}\t{frag_end}\t{cb}\n")
+            # Write fragment line
+            if not args.add_access:
+                out.write(f"{chrom}\t{frag_start}\t{frag_end}\t{cb}\n")
+            else:
+                access_signal = get_access_signal(r1, r2, fasta)
+
+                # remove edit sites outside fragment boundaries
+                access_signal = [site for site in access_signal if frag_start <= site < frag_end]
+
+                access_signal = "|".join(map(str, access_signal))
+                out.write(f"{chrom}\t{frag_start}\t{frag_end}\t{cb}\t{access_signal}\n")
             prev_read = None
 
         bam.close()

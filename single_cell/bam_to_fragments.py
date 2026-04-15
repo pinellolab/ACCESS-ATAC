@@ -87,12 +87,12 @@ def is_good_read_pair(
 
     return True
 
-def get_access_signal(r1, r2, fasta) -> list[int]:
+def get_access_signal(r1, r2, fasta) -> tuple[list[int], list[int]]:
     """
     Compute ACCESS signal for a read pair based on DddSs edit sites.
     Return a list of integers representing the ACCESS edit positions within the fragment.
     """
-    access_sites = []
+    access_sites_c2t, access_sites_g2a = [], []
     for read in [r1, r2]:
         # refer_seq = read.get_reference_sequence().upper()
         query_seq = read.query_sequence
@@ -111,17 +111,20 @@ def get_access_signal(r1, r2, fasta) -> list[int]:
             edit_site = ref_pos  # convert to reference coordinate
             # C -> T at forward strand
             if refer_base == "C" and query_base == "T":
-                access_sites.append(edit_site)
+                access_sites_c2t.append(edit_site)
 
             # G -> A at reverse strand
             elif refer_base == "G" and query_base == "A":
-                access_sites.append(edit_site)
+                access_sites_g2a.append(edit_site)
 
     # remove duplicates
-    access_sites = list(dict.fromkeys(access_sites))
-    access_sites.sort()
+    access_sites_c2t = list(dict.fromkeys(access_sites_c2t))
+    access_sites_c2t.sort()
 
-    return access_sites
+    access_sites_g2a = list(dict.fromkeys(access_sites_g2a))
+    access_sites_g2a.sort()
+
+    return access_sites_c2t, access_sites_g2a
 
 def open_output(path):
     """
@@ -206,10 +209,14 @@ def main():
                 access_signal = get_access_signal(r1, r2, fasta)
 
                 # remove edit sites outside fragment boundaries
-                access_signal = [site for site in access_signal if frag_start <= site < frag_end]
+                access_signal_c2t = [site for site in access_signal[0] if frag_start <= site < frag_end]
+                access_signal_g2a = [site for site in access_signal[1] if frag_start <= site < frag_end]
 
-                access_signal = "|".join(map(str, access_signal))
-                out.write(f"{chrom}\t{frag_start}\t{frag_end}\t{cb}\t{access_signal}\n")
+                access_signal_c2t = "|".join(map(str, access_signal_c2t))
+                access_signal_g2a = "|".join(map(str, access_signal_g2a))
+
+                # access_signal = "|".join(map(str, access_signal))
+                out.write(f"{chrom}\t{frag_start}\t{frag_end}\t{cb}\t{access_signal_c2t}\t{access_signal_g2a}\n")
             prev_read = None
 
         bam.close()

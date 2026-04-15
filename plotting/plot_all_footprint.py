@@ -1,7 +1,3 @@
-import warnings
-
-warnings.filterwarnings("ignore")
-
 import argparse
 import pyranges as pr
 import logging
@@ -11,6 +7,9 @@ import pyBigWig
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import warnings
+warnings.filterwarnings("ignore")
+
 # plt.rcParams['pdf.fonttype'] = 42
 
 logging.basicConfig(
@@ -19,7 +18,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-def get_signal(grs, bw_file, label) -> pd.DataFrame:
+def get_signal(grs, bw_file) -> pd.DataFrame:
     bw = pyBigWig.open(bw_file)
     
     window_size = grs.End.values[0] - grs.Start.values[0]
@@ -29,9 +28,10 @@ def get_signal(grs, bw_file, label) -> pd.DataFrame:
         signal[i] = bw.values(chrom, start, end)
 
     signal[np.isnan(signal)] = 0
+    avg_signal = np.sum(signal, axis=1)
     signal = np.mean(signal, axis=0)
     
-    return signal
+    return signal, avg_signal
 
 def get_all_signal(grs, bw_files: list[str], labels: list[str], extend: int) -> pd.DataFrame:
     # extend regions
@@ -40,14 +40,23 @@ def get_all_signal(grs, bw_files: list[str], labels: list[str], extend: int) -> 
     grs.End = mid + extend
 
     df_list = []
+    df_avg_list = []
     for bw_file, label in zip(bw_files, labels):
-        signal = get_signal(grs=grs, bw_file=bw_file, label=label)
+        signal, avg_signal = get_signal(grs=grs, bw_file=bw_file)
         df = pd.DataFrame(data={"position":range(-extend, extend), "signal": signal, "data": label})
         df_list.append(df)
-    
+
+        df_avg = pd.DataFrame(data={"data": label, 
+                                    "chromosome": grs.Chromosome.values,
+                                    "start": grs.Start.values,
+                                    "end": grs.End.values,
+                                    "avg_signal": avg_signal})
+        df_avg_list.append(df_avg)
+
     df = pd.concat(df_list)
+    df_avg = pd.concat(df_avg_list)
     
-    return df
+    return df, df_avg
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -76,7 +85,7 @@ def main():
     bw_files = args.bw_files.strip().split(",")
     labels = args.labels.strip().split(",")
 
-    df = get_all_signal(grs, bw_files, labels, args.extend)
+    df, df_avg = get_all_signal(grs, bw_files, labels, args.extend)
     
     colors = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33", "#a65628", "#f781bf",
               "#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854"]
@@ -88,7 +97,10 @@ def main():
 
     fig.tight_layout()
     plt.savefig(f'{args.out_dir}/{args.out_name}.png')
+    plt.close()
+
     df.to_csv(f"{args.out_dir}/{args.out_name}.csv", index=False)
+    df_avg.to_csv(f"{args.out_dir}/{args.out_name}_avg.csv", index=False)
 
     logging.info("Done")
 

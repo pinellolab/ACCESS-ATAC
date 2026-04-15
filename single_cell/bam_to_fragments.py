@@ -206,11 +206,11 @@ def main():
             if not args.add_access:
                 out.write(f"{chrom}\t{frag_start}\t{frag_end}\t{cb}\n")
             else:
-                access_signal = get_access_signal(r1, r2, fasta)
+                access_sites_c2t, access_sites_g2a = get_access_signal(r1, r2, fasta)
 
                 # remove edit sites outside fragment boundaries
-                access_signal_c2t = [site for site in access_signal[0] if frag_start <= site < frag_end]
-                access_signal_g2a = [site for site in access_signal[1] if frag_start <= site < frag_end]
+                access_signal_c2t = [site for site in access_sites_c2t if frag_start <= site < frag_end]
+                access_signal_g2a = [site for site in access_sites_g2a if frag_start <= site < frag_end]
 
                 access_signal_c2t = "|".join(map(str, access_signal_c2t))
                 access_signal_g2a = "|".join(map(str, access_signal_g2a))

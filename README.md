@@ -18,6 +18,7 @@ against each other and against conventional ATAC-seq.
 | [`01_process_access/`](01_process_access/) | Complete analysis pipeline for concurrent ACCESS-ATAC in HepG2 and K562, from raw BAM to TF footprint quantification. Start here to reproduce the analysis. |
 | [`02_tfbs_prediction/`](02_tfbs_prediction/) | Benchmark of TF binding site prediction from ACCESS-ATAC signal versus sequence alone. Builds the training data, trains the classifier (bundled in `02_tfbs_prediction/model/`), and evaluates it. |
 | [`03_accessbpnet/`](03_accessbpnet/) | ChromBPNet applied to ACCESS-ATAC: bias model, ChromBPNet model, contribution scores, TF-MoDISco, marginal footprints and variant effect prediction. Bundles a modified ChromBPNet that accepts a bigWig directly and adds an `ACCESS` assay type. |
+| [`04_single_cell_access_atac/`](04_single_cell_access_atac/) | Single-cell ACCESS-ATAC in mouse airway cells: barcode correction, fragment generation, clustering and annotation (ArchR/Seurat), trajectory analysis and TF footprinting. |
 | [`preprocessing/`](#preprocessing) | Convert BAM and fragment files into bigWig signal tracks. |
 | [`single_cell/`](#single_cell) | Cell-barcode correction and single-cell fragment generation. |
 
@@ -28,8 +29,9 @@ numeric order of their filenames. Each has its own README covering how to run it
 paths need adapting: [`01_process_access/`](01_process_access/README.md) generates the
 signal tracks and compares the two assays,
 [`02_tfbs_prediction/`](02_tfbs_prediction/README.md) uses those tracks to benchmark TF
-binding site prediction, and [`03_accessbpnet/`](03_accessbpnet/README.md) models the
-signal with ChromBPNet. The Python modules below are the components those pipelines call,
+binding site prediction, [`03_accessbpnet/`](03_accessbpnet/README.md) models the signal
+with ChromBPNet, and [`04_single_cell_access_atac/`](04_single_cell_access_atac/README.md)
+carries the assay into single cells. The Python modules below are the components those pipelines call,
 and can also be used independently.
 
 All Python scripts are `argparse` command-line tools. They **import sibling modules by bare

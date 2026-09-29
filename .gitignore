@@ -15,3 +15,12 @@ logs/
 
 # macOS
 .DS_Store
+
+# ArchR working files and intermediates (04_single_cell_access_atac)
+*.arrow
+ArchRLogs/
+QualityControl/
+tmp/
+*.log
+04_single_cell_access_atac/clustermap.png
+04_single_cell_access_atac/clustermap.pdf

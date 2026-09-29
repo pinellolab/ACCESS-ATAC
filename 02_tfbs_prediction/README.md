@@ -123,16 +123,3 @@ whichever track is passed first goes through the first module.
 | `accessatac_tn5` | `model(seq, accessatac_tn5)` | ACCESS-ATAC Tn5 |
 | `accessatac_dddss` | `model(seq, accessatac_dddss)` | ACCESS-ATAC edits |
 | `accessatac_both` | `model(seq, accessatac_tn5, accessatac_dddss)` | both ACCESS-ATAC tracks |
-
-## Notes
-
-- The notebooks are committed **without outputs**.
-- `04_train.sh` trains four models per TF sequentially inside a single SLURM job. With
-  hundreds of TFs this is long-running (the script requests 120 h); the existing-output
-  check makes it safe to resubmit after a timeout.
-- `03_prepare_data.py` reads the `noext` bigWigs. See the note in
-  [`../01_process_access/README.md`](../01_process_access/README.md) about which bigWig
-  variants its active task tables actually generate.
-- `01_download_peaks.ipynb`'s skip-if-exists check never fires: it tests for
-  `{name}.bed.gz`, but `gunzip` removes the `.gz` and the file kept on disk is
-  `{name}.bed`. Re-running the notebook therefore re-downloads every peak file.

@@ -16,6 +16,8 @@ logs/
 # macOS
 .DS_Store
 
+CLAUDE.md
+
 # ArchR working files and intermediates (04_single_cell_access_atac)
 *.arrow
 ArchRLogs/

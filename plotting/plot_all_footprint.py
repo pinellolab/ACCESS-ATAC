@@ -4,6 +4,8 @@ import logging
 import pandas as pd
 import numpy as np
 import pyBigWig
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -85,22 +87,22 @@ def main():
     bw_files = args.bw_files.strip().split(",")
     labels = args.labels.strip().split(",")
 
-    df, df_avg = get_all_signal(grs, bw_files, labels, args.extend)
+    df, _ = get_all_signal(grs, bw_files, labels, args.extend)
     
-    colors = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33", "#a65628", "#f781bf",
-              "#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854"]
+    # colors = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33", "#a65628", "#f781bf",
+    #           "#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854"]
 
-    fig, ax = plt.subplots(1, 1, figsize=[6, 4])
-    sns.lineplot(data=df, x="position", y="signal", hue="data", ax=ax, palette=colors)
-    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    plt.title(args.out_name)
+    # fig, ax = plt.subplots(1, 1, figsize=[6, 4])
+    # sns.lineplot(data=df, x="position", y="signal", hue="data", ax=ax, palette=colors)
+    # plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    # plt.title(args.out_name)
 
-    fig.tight_layout()
-    plt.savefig(f'{args.out_dir}/{args.out_name}.png')
-    plt.close()
+    # fig.tight_layout()
+    # plt.savefig(f'{args.out_dir}/{args.out_name}.png')
+    # plt.close()
 
     df.to_csv(f"{args.out_dir}/{args.out_name}.csv", index=False)
-    df_avg.to_csv(f"{args.out_dir}/{args.out_name}_avg.csv", index=False)
+    # df_avg.to_csv(f"{args.out_dir}/{args.out_name}_avg.csv", index=False)
 
     logging.info("Done")
 

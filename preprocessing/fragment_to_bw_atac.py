@@ -252,6 +252,8 @@ def fragments_to_coverage(
 
         starts, ends = per_chrom_fragments_dfs[chrom].select(["start", "end"]).to_numpy().T
 
+        starts = starts.copy()
+        ends = ends.copy()
         # shift cut sites
         for i in range(len(starts)):
             starts[i] += forward_shift
@@ -300,7 +302,7 @@ def main():
         grs = pr.read_bed(args.bed_file)
         grs = grs.merge()
     else:
-        logging.info(f"Using whole genome")
+        logging.info("Using whole genome")
         logging.info(f"Loading chromosome sizes from {args.chrom_size_file}")
         chrom_sizes = read_chrom_sizes(args.chrom_size_file)
         chromosome = list(chrom_sizes.keys())

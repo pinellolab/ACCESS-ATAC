@@ -8,7 +8,7 @@ Both signals are extracted from the same ACCESS-ATAC BAM:
 | Signal | Definition | `deamtools bam2bw` flag | Output name tag |
 |---|---|---|---|
 | **ATAC** | Tn5 cut sites (+4 / −5 offset) | `--event tn5` | `*_atac_*` |
-| **ACCESS** | DddA deaminase edits (`C→T`, `G→A`) | omitted (default) | `*_access_*` |
+| **ACCESS** | DddSs deaminase edits (`C→T`, `G→A`) | omitted (default) | `*_access_*` |
 
 The comparison dataset is ENCODE ATAC-seq for the same two cell lines. Both assays are put
 through identical filtering and depth matching so that the two are directly comparable.

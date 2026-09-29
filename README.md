@@ -5,44 +5,55 @@ from a single library:
 
 - **ATAC signal** — Tn5 insertion (cut) sites, derived from fragment ends with a +4 / −5
   offset.
-- **ACCESS signal** — per-base **DddA-family cytosine deaminase edits**, read off alignments
+- **ACCESS signal** — per-base **DddSs cytosine deaminase edits**, read off alignments
   as `C→T` (forward strand) and `G→A` (reverse strand) mismatches against the reference.
 
-This repository contains the code used to generate both signal tracks and to compare them
-against each other and against conventional ATAC-seq.
+Because both signals come from the same molecules they can be compared directly, and that
+comparison is what most of this repository does.
+
+<p align="center">
+  <img src="schematic/access-atac.png"
+       alt="ACCESS-ATAC: Tn5 tagmentation and DddSs deamination of open chromatin, followed by genome-wide accessibility, TF footprinting, sequence-to-function modelling and single-cell analysis"
+       width="100%">
+</p>
+
+The left panel is the assay: Tn5 and the DddSs deaminase act on open chromatin in the same
+reaction, Tn5 fragmenting the DNA and the deaminase converting exposed cytosines, so one
+library carries both readouts. The right panel is the downstream analysis, covered here by
+`01_process_access/` (genome-wide accessibility and TF footprinting),
+`03_accessbpnet/` (sequence-to-function modelling, the ACCESSBPNet panel) and
+`04_single_cell_access_atac/` (the single-cell panel). `02_tfbs_prediction/` is not
+depicted.
 
 ## Contents
 
-| Directory | Purpose |
+Four analysis pipelines, each self-contained and each with its own README documenting how
+to run it and which paths need adapting.
+
+| Pipeline | What it does |
 |---|---|
-| [`01_process_access/`](01_process_access/) | Complete analysis pipeline for concurrent ACCESS-ATAC in HepG2 and K562, from raw BAM to TF footprint quantification. Start here to reproduce the analysis. |
-| [`02_tfbs_prediction/`](02_tfbs_prediction/) | Benchmark of TF binding site prediction from ACCESS-ATAC signal versus sequence alone. Builds the training data, trains the classifier (bundled in `02_tfbs_prediction/model/`), and evaluates it. |
-| [`03_accessbpnet/`](03_accessbpnet/) | ChromBPNet applied to ACCESS-ATAC: bias model, ChromBPNet model, contribution scores, TF-MoDISco, marginal footprints and variant effect prediction. Bundles a modified ChromBPNet that accepts a bigWig directly and adds an `ACCESS` assay type. |
-| [`04_single_cell_access_atac/`](04_single_cell_access_atac/) | Single-cell ACCESS-ATAC in mouse airway cells: barcode correction, fragment generation, clustering and annotation (ArchR/Seurat), trajectory analysis and TF footprinting. |
-| [`preprocessing/`](#preprocessing) | Convert BAM and fragment files into bigWig signal tracks. |
-| [`single_cell/`](#single_cell) | Cell-barcode correction and single-cell fragment generation. |
+| [`01_process_access/`](01_process_access/README.md) | Concurrent ACCESS-ATAC in HepG2 and K562: QC, filtering, depth matching, signal tracks, peak calling and TF footprint quantification, compared against ENCODE ATAC-seq. **Start here.** |
+| [`02_tfbs_prediction/`](02_tfbs_prediction/README.md) | Benchmark of TF binding site prediction from ACCESS-ATAC signal versus sequence alone. Builds the training data, trains a CNN classifier and evaluates it. |
+| [`03_accessbpnet/`](03_accessbpnet/README.md) | ChromBPNet applied to ACCESS-ATAC: bias model, ChromBPNet model, contribution scores, TF-MoDISco, marginal footprints and variant effect prediction. |
+| [`04_single_cell_access_atac/`](04_single_cell_access_atac/README.md) | Single-cell ACCESS-ATAC in mouse airway cells: barcode correction, fragment generation, clustering and annotation (ArchR / Seurat), trajectory analysis and TF footprinting. |
 
 ## Reproducing the analysis
 
-The numbered directories contain the analyses as SLURM scripts and notebooks, run in the
-numeric order of their filenames. Each has its own README covering how to run it and which
-paths need adapting: [`01_process_access/`](01_process_access/README.md) generates the
-signal tracks and compares the two assays,
-[`02_tfbs_prediction/`](02_tfbs_prediction/README.md) uses those tracks to benchmark TF
-binding site prediction, [`03_accessbpnet/`](03_accessbpnet/README.md) models the signal
-with ChromBPNet, and [`04_single_cell_access_atac/`](04_single_cell_access_atac/README.md)
-carries the assay into single cells. The Python modules below are the components those pipelines call,
-and can also be used independently.
+Within each pipeline, scripts run in the numeric order of their filenames; notebooks are
+run interactively at the point where their number falls. The shell scripts are SLURM job
+scripts, submitted with `sbatch`.
 
-All Python scripts are `argparse` command-line tools. They **import sibling modules by bare
-module name** (`from utils import ...`), which resolves against the directory the script
-itself lives in — so the module directories are run from inside:
+Each pipeline bundles the Python it needs — under `scripts/`, `model/` or `plotting/` —
+so no pipeline reaches into another's code. Those bundled scripts are `argparse`
+command-line tools that **import their siblings by bare module name**
+(`from utils import ...`). That resolves against the directory the script itself lives in,
+so they are invoked by path from the pipeline directory:
 
 ```bash
-cd preprocessing
-python fragment_to_bw_atac.py \
+cd 04_single_cell_access_atac
+python scripts/fragment_to_bw_atac.py \
     --input_fragments fragments.tsv.gz \
-    --chrom_size_file hg38.chrom.sizes \
+    --chrom_size_file genome.chrom.sizes \
     --out_dir out --out_name sample_atac
 ```
 
@@ -50,16 +61,26 @@ Shared conventions: paired `--out_dir` / `--out_name` arguments produce
 `{out_dir}/{out_name}.{ext}`; coordinates are 0-based half-open (BED convention); output
 directories are **not** created automatically.
 
+The pipelines are chained — `02` and `03` consume signal tracks produced by `01` — and all
+of them read reference data and raw input from paths that are hard-coded for the cluster
+they were run on. Each pipeline's README lists those paths in a "paths that must be
+adapted" table.
+
 ### Dependencies
 
 Python: `numpy`, `scipy`, `pandas`, `polars`, `pyranges`, `pysam`, `pyBigWig`, `pyfaidx`,
 `pybedtools`, `numba`, `torch`, `scikit-learn`, `matplotlib`, `seaborn`, `biopython`,
-`tqdm`.
+`tqdm`, plus `h5py`, `hdf5plugin` and `logomaker` for the ChromBPNet evaluation notebooks.
+
+R (single-cell analysis in `04_single_cell_access_atac/`, 13 of its notebooks use an R
+kernel): `ArchR`, `Seurat`, `Signac`, `rtracklayer`, `BSgenome.Mmusculus.UCSC.mm39`,
+`ggplot2`, `dplyr`, `tidyr`, `tibble`, `cowplot`, `pheatmap`, `ComplexUpset`, `openxlsx`,
+`future`.
 
 External tools: `samtools`, `bedtools`, `deeptools`, `MACS2`, UCSC `wigToBigWig` and
-`bedGraphToBigWig`, and [RGT](https://reg-gen.readthedocs.io/) for motif matching. The
-pipeline scripts also invoke `deamtools`, a separate command-line tool that is not part of
-this repository.
+`bedGraphToBigWig`, [RGT](https://reg-gen.readthedocs.io/) for motif matching, and
+[Nextflow](https://www.nextflow.io/) for the alignment step of pipeline 04. The scripts
+also invoke `deamtools`, a separate command-line tool that is not part of this repository.
 
 Training the TFBS classifier (`02_tfbs_prediction/04_train.sh`) and the ChromBPNet models
 in `03_accessbpnet/` require a CUDA device.
@@ -70,60 +91,5 @@ in `03_accessbpnet/` require a CUDA device.
 [ChromBPNet](https://github.com/kundajelab/chrombpnet) (MIT, Copyright 2019 Kundaje Lab)
 with local modifications, taken from the `access` branch of
 [lzj1769/chrombpnet](https://github.com/lzj1769/chrombpnet). Its `LICENSE` is included
-unchanged; the modifications are described in
-[`03_accessbpnet/README.md`](03_accessbpnet/README.md).
-
----
-
-## File reference
-
-### preprocessing
-
-BAM and fragment files to bigWig signal tracks.
-
-| File | Description |
-|---|---|
-| `fragment_to_bw_atac.py` | Fragment file → **Tn5 cut-site** bigWig. Reads columns 1–3, shifts the fragment start by `--forward_shift` (default 4) and the end by `−--reverse_shift` (default 5), then piles up both fragment ends as cut sites. `--extend_size` widens each cut site into a window; `--normalize` scales to RPM; `--bed_file` restricts to given regions, otherwise `--chrom_size_file` defines the whole genome. |
-| `fragment_to_bw_access.py` | Fragment file → **deaminase edit** bigWig. Reads a 6-column fragment file and piles up the `\|`-separated edit positions in column 6 (rows with an empty or `none` field are skipped). Same `--extend_size`, `--normalize`, `--bed_file` / `--chrom_size_file` options as above. |
-| `bam_to_bw_access.py` | BAM → edit signal bigWig, without an intermediate fragment file. `--out_type count` writes raw edit counts per base; `--out_type fraction` (default) writes edits ÷ per-base coverage, with positions below `--min_coverage` set to zero. Writes a WIG and converts it with `wigToBigWig`. |
-| `bam_to_fragments_atac.py` | Coordinate-sorted BAM → fragment file. Keeps the forward read of each pair and applies the Tn5 offsets `--shift_plus` / `--shift_minus`. Emits `chrom start end`, or `chrom start end barcode 1` when `--bc_tag` is given. Adapted from [kundajelab/ENCODE_scatac](https://github.com/kundajelab/ENCODE_scatac/blob/master/workflow/scripts/bam_to_fragments.py). |
-| `fragment_to_bam.py` | Fragment file → BAM. **Unfinished** — reads `args.input_fragments` while the flag is `--input_fragment`, and references undefined variables. |
-| `utils.py` | Helpers imported by the scripts above: `read_chrom_sizes()` parses a chrom.sizes TSV into a dict; `get_chrom_size_from_bam()` builds a PyRanges of chromosome extents from a BAM header. |
-
-Both `fragment_to_bw_*.py` scripts share the same implementation: a numba-compiled
-per-base depth array (`calculate_depth`) followed by run-length encoding
-(`collapse_consecutive_values`) before writing bigWig intervals.
-
-### single_cell
-
-Cell-barcode correction, barcode attachment, and fragment generation.
-
-| File | Description |
-|---|---|
-| `barcode_correction.py` | 10x-style barcode correction. Takes one or more barcode FASTQs (positional) plus a whitelist (positional), and writes a deduplicated `original<TAB>corrected` mapping to `-o`. Pass 1 counts exact whitelist matches as a prior; pass 2 scores each distinct observed barcode's Hamming-distance-1 whitelist neighbours by `(prior + 1) × Phred error probability at the mismatch position`, accepting the best candidate when its posterior reaches `--prob-threshold` (default 0.9), otherwise leaving the barcode unchanged. |
-| `add_barcode_to_fastq.py` | Appends `_<barcode>` to each read name in `--reads_fastq`, taking barcodes from the matching records of `--barcodes_fastq` and optionally remapping them through `--corrected_barcodes`. Aborts if read names disagree between the two files. Writes gzipped FASTQ. |
-| `add_barcode_to_fastq_v2.py` | Same operation implemented with Biopython `SeqIO`; does not accept a correction map. |
-| `add_barcode_to_bam.py` | Recovers the barcode from the read name (the last `_`-separated field, as written by `add_barcode_to_fastq.py`) and stores it in the `--bc_tag` tag (default `CB`). |
-| `add_barcode_to_bam_v2.py` | Reads barcodes directly from `--barcode_file` (a FASTQ keyed by read name), optionally applies the `--corrected_barcode` mapping, and writes the `--bc_tag` tag. Avoids the read-name round trip. |
-| `add_barcode.py` | Sets `--bc_tag` from `--barcode_file`, a gzipped CSV with `Identifier` and `Barcode` columns keyed by read name. |
-| `bam_to_fragments.py` | **Name-sorted** BAM → fragment file. Pairs mates by consecutive `query_name` and keeps pairs passing 10x-style filters (MAPQ ≥ `--min-mapq` on both mates, properly paired, primary only, no `SA` tag, same contig, matching `--cell-tag`). Fragment boundaries use the Tn5 offsets +4 / −5. With `--add-access`, walks each pair's aligned positions against `--ref-fasta` and records C→T and G→A edit positions falling inside the fragment. |
-| `aggregate_replicates.py` | Collapses PCR replicates sharing `(chrom, start, end, barcode)`, summing the replicate-count column, and keeps only edit positions supported by at least half the total replicate count. Handles a single edit column. |
-| `aggregate_replicates_v2.py` | Same, for fragment files carrying **separate C→T and G→A columns** (the `bam_to_fragments.py --add-access` layout). |
-| `filter_bam_by_barcode.py` | Keeps only reads whose `--bc_tag` value appears in the `barcode` column of `--barcode_file` (CSV). |
-| `get_edit_ratio_per_barcode.py` | Per barcode, counts reads with and without any reference mismatch; writes a CSV of edited, non-edited and total read counts. |
-| `check_fastq_quality.py` | Counts FASTQ records whose sequence and quality strings differ in length; writes a two-column summary. |
-| `call_peaks.py` | **Misnamed** — byte-identical to `add_barcode.py`, and does not call peaks. Peak calling is done with MACS2 in `01_process_access/10_call_peaks.sh`. |
-| `subsample_fragment.py` | Intended to subsample fragments per barcode. **Unfinished** — pass 1 counts fragments per barcode, pass 2 is not implemented. |
-
-#### Fragment file formats
-
-Column layouts vary by producer; check the column count before parsing. Edit positions are
-`|`-joined integers in **reference coordinates** (not fragment offsets), empty or `.` when
-absent.
-
-| Columns | Layout | Written by |
-|---|---|---|
-| 4 | `chrom start end barcode` | `bam_to_fragments.py` |
-| 6 | `chrom start end barcode c2t_edits g2a_edits` | `bam_to_fragments.py --add-access` |
-| 6 | `chrom start end barcode n_replicates edits` | `aggregate_replicates.py` |
-| 7 | `chrom start end barcode n_replicates c2t_edits g2a_edits` | `aggregate_replicates_v2.py` |
+unchanged, and the modifications are described in
+[`03_accessbpnet/chrombpnet/README.md`](03_accessbpnet/chrombpnet/README.md).

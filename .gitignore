@@ -26,3 +26,6 @@ tmp/
 *.log
 04_single_cell_access_atac/clustermap.png
 04_single_cell_access_atac/clustermap.pdf
+
+# Illustrator source for the schematic (the exported PNG is committed)
+schematic/access-atac.ai

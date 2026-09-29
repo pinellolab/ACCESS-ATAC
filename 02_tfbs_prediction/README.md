@@ -62,19 +62,6 @@ directory. Step 01 instead writes to
 the peaks back from there. That path predates this pipeline; it is the one place where the
 numbering convention does not hold.
 
-## Scripts
-
-| Script | Input | Output | What it does |
-|---|---|---|---|
-| `01_download_peaks.ipynb` | `data/encode_chipseq/{cell}.txt` | `27_compare_tfbs_prediction/01_download_peaks/{cell}/` | Downloads ENCODE ChIP-seq peak files with `wget`, one per URL in the cell type's list, then gunzips and coordinate-sorts each. The file stem of the URL becomes the TF identifier used by every later step, so each peak set is saved as `{tf}.bed`. Writes `tfbs_peaks_metadata.csv` listing the (sample, tf) pairs, which step 03 uses as its task list. |
-| `02_create_labels.py` | `27_compare_tfbs_prediction/01_download_peaks/` | `02_create_labels/{cell}/{tf}.labels.tsv` | Builds the labelled region set for one TF. Positives are 256 bp windows centred on each narrowPeak summit (column 10, falling back to the interval midpoint). Negatives are drawn at random to match the positives in **count, chromosome, width and GC content** (20 GC bins), excluding the positives themselves and the blacklist. Output is a 4-column TSV: `chrom start end label`. Seed 42. |
-| `02_submit.sh` | — | — | SLURM array wrapper for `02_create_labels.py`. Builds the task list by globbing `*.bed` under each cell type's peak directory. |
-| `03_prepare_data.py` | `02_create_labels/`, bigWigs from `01_process_access/` | `03_prepare_data/{cell}/{train,valid,test}/{tf}.npz` | Converts the labelled regions into model input. For each region: one-hot encodes the 256 bp sequence, and extracts two per-base ACCESS-ATAC signal tracks (Tn5 insertions and deaminase edits), each `log1p`-transformed. Regions are split into train / valid / test **by chromosome** using `fold_0.json`. Regions with characters outside `ACGTN` are dropped. Saves compressed npz with keys `seq`, `signal_accessatac_tn5`, `signal_accessatac_dddss`, `label`. |
-| `03_submit.sh` | — | — | SLURM array wrapper for `03_prepare_data.py`. Builds the task list from columns 1 and 2 of `tfbs_peaks_metadata.csv`. |
-| `04_train.sh` | `03_prepare_data/` | `04_train/{cell}/{assay}/{model,logs,prediction,metric}/` | Loops over TFs × the four assay settings, calling `model/train.py` for each with `--batch_size 64 --epochs 30`. Skips any combination whose prediction CSV already exists. Requires one GPU. |
-| `05_eval.ipynb` | `04_train/` | `05_eval/{cell}/` | Per TF, reads each assay's test predictions and computes the precision–recall curve, AUPR, and **precision at fixed recall levels** (0.01, 0.05, 0.1, 0.2, 0.3, 0.4). Writes `{tf}_precision_recall.csv`, `precision_at_recall.csv` and per-TF curve plots. |
-| `06_plot_curve.ipynb` | `04_train/`, `05_eval/` | `06_plot_curve/{cell}/` | Redraws the precision–recall curves restricted to the low-recall regime (`recall ≤ 0.2`, the region that matters for TFBS prediction), one figure per TF with a fixed colour per assay and precision-at-recall in the legend. |
-
 ## The model (`model/`, diagram in `network/`)
 
 A binary classifier over a 256 bp window. `SeqEncoder` embeds the one-hot sequence with a

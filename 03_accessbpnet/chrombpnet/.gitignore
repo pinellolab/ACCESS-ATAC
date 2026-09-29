@@ -1,0 +1,18 @@
+# Compiler outputs #
+*.a
+*.bat
+*.exe
+*.json
+*.pyc
+*.ipynb_checkpoints
+*.pkl
+*.npy
+# Directories #
+# logs
+results
+experimental_scripts
+tracks
+needs_cleanup
+old
+build
+chrombpnet.egg-info/

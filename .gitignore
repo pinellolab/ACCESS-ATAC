@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Cluster job logs
+logs/
+*.out
+*.err
+
+# macOS
+.DS_Store

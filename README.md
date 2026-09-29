@@ -17,18 +17,21 @@ against each other and against conventional ATAC-seq.
 |---|---|
 | [`01_process_access/`](01_process_access/) | Complete analysis pipeline for concurrent ACCESS-ATAC in HepG2 and K562, from raw BAM to TF footprint quantification. Start here to reproduce the analysis. |
 | [`02_tfbs_prediction/`](02_tfbs_prediction/) | Benchmark of TF binding site prediction from ACCESS-ATAC signal versus sequence alone. Builds the training data, trains the classifier (bundled in `02_tfbs_prediction/model/`), and evaluates it. |
+| [`03_accessbpnet/`](03_accessbpnet/) | ChromBPNet applied to ACCESS-ATAC: bias model, ChromBPNet model, contribution scores, TF-MoDISco, marginal footprints and variant effect prediction. Bundles a modified ChromBPNet that accepts a bigWig directly and adds an `ACCESS` assay type. |
 | [`preprocessing/`](#preprocessing) | Convert BAM and fragment files into bigWig signal tracks. |
 | [`single_cell/`](#single_cell) | Cell-barcode correction and single-cell fragment generation. |
 | [`plotting/`](#plotting) | Aggregate signal profiles over region sets. |
 
 ## Reproducing the analysis
 
-The numbered directories contain the analyses as SLURM scripts and notebooks, each with
-its own README documenting every step's inputs, outputs and parameters:
-[`01_process_access/`](01_process_access/README.md) generates the signal tracks and
-compares the two assays, and [`02_tfbs_prediction/`](02_tfbs_prediction/README.md) uses
-those tracks to benchmark TF binding site prediction. The Python modules below are the
-components those pipelines call, and can also be used independently.
+The numbered directories contain the analyses as SLURM scripts and notebooks, run in the
+numeric order of their filenames. Each has its own README covering how to run it and which
+paths need adapting: [`01_process_access/`](01_process_access/README.md) generates the
+signal tracks and compares the two assays,
+[`02_tfbs_prediction/`](02_tfbs_prediction/README.md) uses those tracks to benchmark TF
+binding site prediction, and [`03_accessbpnet/`](03_accessbpnet/README.md) models the
+signal with ChromBPNet. The Python modules below are the components those pipelines call,
+and can also be used independently.
 
 All Python scripts are `argparse` command-line tools. They **import sibling modules by bare
 module name** (`from utils import ...`), which resolves against the directory the script
@@ -57,7 +60,17 @@ External tools: `samtools`, `bedtools`, `deeptools`, `MACS2`, UCSC `wigToBigWig`
 pipeline scripts also invoke `deamtools`, a separate command-line tool that is not part of
 this repository.
 
-Training the TFBS classifier (`02_tfbs_prediction/03_train.sh`) requires a CUDA device.
+Training the TFBS classifier (`02_tfbs_prediction/04_train.sh`) and the ChromBPNet models
+in `03_accessbpnet/` require a CUDA device.
+
+### Third-party code
+
+`03_accessbpnet/chrombpnet/` is a copy of
+[ChromBPNet](https://github.com/kundajelab/chrombpnet) (MIT, Copyright 2019 Kundaje Lab)
+with local modifications, taken from the `access` branch of
+[lzj1769/chrombpnet](https://github.com/lzj1769/chrombpnet). Its `LICENSE` is included
+unchanged; the modifications are described in
+[`03_accessbpnet/README.md`](03_accessbpnet/README.md).
 
 ---
 

@@ -20,7 +20,7 @@ import pyBigWig
 IN_DIR    = "../../results/02_tfbs_prediction/02_create_labels"
 OUT_DIR   = "../../results/02_tfbs_prediction/03_prepare_data"
 FASTA     = "../../data/GRCh38/GRCh38.primary_assembly.genome.fa"
-FOLD_JSON = "../46_accessbpnet/fold_0.json"
+FOLD_JSON = "../03_accessbpnet/fold_0.json"
 BW_DIR    = "../../results/01_process_access"
 WIDTH     = 256
 

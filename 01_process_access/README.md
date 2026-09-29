@@ -43,7 +43,6 @@ need to be changed for another environment:
 | `../../data/Blacklist/hg38-blacklist.v2.bed` | ENCODE hg38 blacklist v2 |
 | `../../data/bap/bap/anno/TSS/hg38.refGene.TSS.bed` | TSS annotation for heatmaps |
 | `../../data/bap/bap/anno/bedtools/chrom_hg38.sizes` | chromosome sizes for `bedtools slop` |
-| `../../github/ACCESS-ATAC/plotting/plot_all_footprint.py` | footprint profile script (step 15) |
 | `~/rgtdata/motifs/jaspar_vertebrates/` | JASPAR PWMs, read by step 16 |
 
 Conda environments: `access` for most scripts, `macs2` for `10_call_peaks.sh`. The scripts
@@ -52,6 +51,8 @@ initialised in the submitting shell — either through your shell profile, or by
 line such as `source "$(conda info --base)/etc/profile.d/conda.sh"` to each script.
 
 Input BAM naming: `062424_{HepG2,K562}_concurrent_ACCESS-ATAC.dedup.hg38_core.bam`.
+
+`plotting/plot_all_footprint.py` is bundled here and called by `15_plot_footprint.sh`. It averages bigWig signal over a BED region set, recentring each region on its midpoint ± `--extend`, and writes a tidy CSV with `position`, `signal` and `data` columns.
 
 ## Notes
 

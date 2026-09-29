@@ -1,19 +1,3 @@
-# Bias factorized, base-resolution deep learning models of chromatin accessibility reveal cis-regulatory sequence syntax, transcription factor footprints and regulatory variants
-
-- This repo contains code for the paper `Bias factorized, base-resolution deep learning models of chromatin accessibility reveal cis-regulatory sequence syntax, transcription factor footprints and regulatory variants` (technical report coming soon) by  Anusri Pampari*, Anna Shcherbina*, Anshul Kundaje. (*authors contributed equally)  
-- Please contact [Anusri Pampari] (\<first-name\>@stanford.edu) for suggestions and comments. 
-- Here is a link to the [slides](https://docs.google.com/presentation/d/1Ow6K8TYN40u7T3ODdo-JRCLuv5fUUacA/edit?usp=sharing&ouid=104820480456877027097&rtpof=true&sd=true), [ISMB talk](https://www.youtube.com/watch?v=3W3JeJvvjLc) and a comprehensive [tutorial](https://github.com/kundajelab/chrombpnet/wiki). Please see the [FAQ](https://github.com/kundajelab/chrombpnet/wiki/FAQ) and file a github [issue](https://github.com/kundajelab/chrombpnet/issues) if you have questions.
-- If you are using chrombpnet <= v0.1.3 please refer to the note here - https://github.com/kundajelab/chrombpnet/wiki/Denovo-motif-discovery 
-- If you are using chrombpnet repo actively in your project, I strongly recommend adding yourself to the watchers list for updates. Click on the eye symbol (below the star and above the fork symbol to the right). This will keep you informed of all the major updates and bugs posted for this repo.  
-
-Chromatin profiles (DNASE-seq and ATAC-seq) exhibit multi-resolution shapes and spans regulated by co-operative binding of transcription factors (TFs). This complexity is further difficult to mine because of confounding bias from enzymes (DNASE-I/Tn5) used in these assays. Existing methods do not account for this complexity at base-resolution and do not account for enzyme bias correctly, thus missing the high-resolution architecture of these profiles. Here we introduce ChromBPNet to address both these aspects.
-
-ChromBPNet (shown in the image as `Bias-Factorized ChromBPNet`) is a fully convolutional neural network that uses dilated convolutions with residual connections to enable large receptive fields with efficient parameterization. It also performs automatic assay bias correction in two steps, first by learning simple model on chromatin background that captures the enzyme effect (called `Frozen Bias Model` in the image). Then we use this model to regress out the effect of the enzyme from the ATAC-seq/DNASE-seq profiles. This two step process ensures that the sequence component of the ChromBPNet model (called `TF Model`) does not learn enzymatic bias. 
-
-<p align="center">
-<img src="images/chrombpnet_arch.png" alt="ChromBPNet" align="center" style="width: 400px;"/>
-</p>
-
 # ⚠ This is a modified copy of ChromBPNet (ACCESS fork)
 
 This is **not** stock ChromBPNet. It is the `access` branch of
@@ -60,112 +44,11 @@ where you want ChromBPNet to make the bigWig from a BAM rather than supplying on
 
 TensorFlow is pinned to `2.8.1` rather than `2.8.0`.
 
-## Training on ACCESS and on ATAC
+## How this fork is used
 
-Because ACCESS-ATAC yields two tracks from the same library, both are trained with the
-**same commands** — the only differences are `-d` and which bigWig is passed to `-ibw`:
-
-| | ATAC readout | ACCESS readout |
-|---|---|---|
-| bigWig | Tn5 insertion counts | deaminase edit counts |
-| `-d` | `ATAC` | `ACCESS` |
-
-Everything after the bigWig — peaks, background regions, fold split, and every downstream
-subcommand — is identical. That is deliberate: it makes the two readouts directly
-comparable, since any difference in the resulting models comes from the signal rather than
-from the processing.
-
-### Step 0 — build the two bigWigs
-
-Done outside ChromBPNet, from the same BAM. In this repository that is
-[`../02_bam2bw.sh`](../02_bam2bw.sh), which calls `deamtools bam2bw` twice per sample:
-`--event tn5` for the ATAC track and the default (edit) mode for the ACCESS track,
-producing `{sample}_atac.bw` and `{sample}_access.bw`.
-
-Alternatively, let ChromBPNet build the ACCESS track itself from a BAM with
-`chrombpnet prep reads_to_bigwig -d ACCESS`.
-
-### Step 1 — background regions (once per sample, shared by both assays)
-
-```bash
-chrombpnet prep nonpeaks \
-    -g   genome.fa \
-    -p   peaks.narrowPeak \
-    -c   chrom.sizes \
-    -fl  fold_0.json \
-    -br  blacklist.bed \
-    -o   ${OUT}/nonpeaks
-```
-
-GC-matched negatives do not depend on the assay, so this runs once and both models reuse
-`nonpeaks_negatives.bed`.
-
-### Step 2 — bias model (once per assay)
-
-```bash
-ASSAY=ACCESS                       # or ATAC
-BW=${sample}_access.bw             # or ${sample}_atac.bw
-
-chrombpnet bias pipeline \
-    -ibw ${BW} \
-    -d   ${ASSAY} \
-    -g   genome.fa \
-    -c   chrom.sizes \
-    -p   peaks.narrowPeak \
-    -n   ${OUT}/nonpeaks_negatives.bed \
-    -fl  fold_0.json \
-    -b   0.5 \
-    -o   ${OUT}/${ASSAY} \
-    -fp  ${sample}
-```
-
-`-b 0.5` is the bias threshold factor. Each assay needs **its own** bias model: the
-enzymatic bias of Tn5 and of DddA are different, which is exactly what `-d` selects the
-motifs for. See [`../04_chrombpnet_bias.sh`](../04_chrombpnet_bias.sh).
-
-### Step 3 — ChromBPNet model (once per assay)
-
-```bash
-chrombpnet pipeline \
-    -ibw ${BW} \
-    -d   ${ASSAY} \
-    -g   genome.fa \
-    -c   chrom.sizes \
-    -p   peaks.narrowPeak \
-    -n   ${OUT}/nonpeaks_negatives.bed \
-    -fl  fold_0.json \
-    -b   ${BIAS_OUT}/${ASSAY}/models/${sample}_bias.h5 \
-    -o   ${OUT}/${ASSAY}
-```
-
-`-b` now takes the bias model trained in step 2 for the *same* assay. The output directory
-must not already exist. See [`../05_run_chrombpnet.sh`](../05_run_chrombpnet.sh).
-
-### Step 4 onwards — identical for both assays
-
-These take a trained model and no longer need `-d` or a bigWig:
-
-```bash
-# contribution scores
-chrombpnet contribs_bw -m models/chrombpnet_nobias.h5 \
-    -r peaks.narrowPeak -g genome.fa -c chrom.sizes -op ${PREFIX}
-
-# predicted signal tracks
-chrombpnet pred_bw -bm models/bias_model_scaled.h5 \
-    -cm models/chrombpnet.h5 -cmb models/chrombpnet_nobias.h5 \
-    -r peaks.narrowPeak -g genome.fa -c chrom.sizes -op ${PREFIX}
-
-# marginal footprints
-chrombpnet footprints -m models/chrombpnet_nobias.h5 \
-    -r nonpeaks_negatives.bed -g genome.fa -fl fold_0.json \
-    -op ${PREFIX} -pwm_f motif_to_pwm.tsv
-```
-
-Use `chrombpnet_nobias.h5` for the bias-corrected model and `chrombpnet.h5` for the
-uncorrected one; comparing the two marginal footprints shows how much enzymatic bias was
-removed. See [`../06_chrombpnet_contribs.sh`](../06_chrombpnet_contribs.sh),
-[`../09_chrombpnet_pred.sh`](../09_chrombpnet_pred.sh) and
-[`../14_marginal_footprint.sh`](../14_marginal_footprint.sh).
+For worked commands — building the two bigWigs, and training a bias model and a ChromBPNet
+model for the ACCESS and ATAC readouts — see the pipeline that wraps this copy:
+[`../README.md`](../README.md).
 
 ## Known issue
 

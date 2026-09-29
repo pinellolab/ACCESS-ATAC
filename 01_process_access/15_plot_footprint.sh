@@ -14,7 +14,7 @@ conda activate access
 in_dir=../../results/01_process_access/14_get_mpbs
 out_dir=../../results/01_process_access/15_plot_footprint
 bw_dir=../../results/01_process_access/06_bam2bw_access_atac
-script=../../github/ACCESS-ATAC/plotting/plot_all_footprint.py
+script=plotting/plot_all_footprint.py
 mkdir -p logs
 
 # --- task table: 4 = 2 samples x 2 assays ---

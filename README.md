@@ -20,7 +20,6 @@ against each other and against conventional ATAC-seq.
 | [`03_accessbpnet/`](03_accessbpnet/) | ChromBPNet applied to ACCESS-ATAC: bias model, ChromBPNet model, contribution scores, TF-MoDISco, marginal footprints and variant effect prediction. Bundles a modified ChromBPNet that accepts a bigWig directly and adds an `ACCESS` assay type. |
 | [`preprocessing/`](#preprocessing) | Convert BAM and fragment files into bigWig signal tracks. |
 | [`single_cell/`](#single_cell) | Cell-barcode correction and single-cell fragment generation. |
-| [`plotting/`](#plotting) | Aggregate signal profiles over region sets. |
 
 ## Reproducing the analysis
 
@@ -126,9 +125,3 @@ absent.
 | 6 | `chrom start end barcode c2t_edits g2a_edits` | `bam_to_fragments.py --add-access` |
 | 6 | `chrom start end barcode n_replicates edits` | `aggregate_replicates.py` |
 | 7 | `chrom start end barcode n_replicates c2t_edits g2a_edits` | `aggregate_replicates_v2.py` |
-
-### plotting
-
-| File | Description |
-|---|---|
-| `plot_all_footprint.py` | Averages bigWig signal over a BED region set, recentring each region on its midpoint ± `--extend`. Accepts comma-separated `--bw_files` and `--labels`, and writes a tidy CSV with `position`, `signal` and `data` columns. Used by `01_process_access/15_plot_footprint.sh`. The plotting block is commented out; only the CSV is written. |

@@ -1,20 +1,19 @@
 # 03_accessbpnet
 
-Applies **ChromBPNet** to ACCESS-ATAC data: trains a bias model and a ChromBPNet model,
-derives contribution scores, runs TF-MoDISco motif discovery, computes marginal
-footprints, and scores genetic variants.
+Trains **ChromBPNet** on ACCESS-ATAC, then uses the models for motif discovery, footprints
+and variant scoring.
 
-ChromBPNet was written for ATAC-seq and DNase-seq, which it summarises as Tn5 or DNase
-cut-site counts. ACCESS-ATAC's second readout is per-base deaminase editing, which does not
-fit that model. [`chrombpnet/`](chrombpnet/) is therefore a **modified copy of ChromBPNet**
-that adds an `ACCESS` assay type and lets a precomputed bigWig be supplied directly. What
-was changed there is documented in [`chrombpnet/README.md`](chrombpnet/README.md); how
-this pipeline drives it is [below](#using-chrombpnet).
+ChromBPNet was written for ATAC-seq and DNase-seq, which it counts as cut sites. The
+ACCESS readout is base-level editing, which does not fit that. [`chrombpnet/`](chrombpnet/)
+is therefore a modified copy. It adds an `ACCESS` assay type and accepts a bigWig directly.
+The changes are described in [`chrombpnet/README.md`](chrombpnet/README.md).
+
+Both readouts are modelled the same way. Only two things differ: `-d` and which bigWig is
+passed. See [Using ChromBPNet](#using-chrombpnet).
 
 ## Running
 
-Scripts are SLURM job scripts, run in the numeric order of their filenames. Notebooks are
-run interactively at the point where their number falls.
+Run the scripts in filename order. Notebooks are run interactively.
 
 ```bash
 mkdir -p logs
@@ -23,147 +22,152 @@ sbatch 02_bam2bw.sh
 ...
 ```
 
-Each script writes to `../../results/03_accessbpnet/<NN_name>/`, numbered to match the
-script that produces it. The one exception is `03_chrombpnet_bias/`, which is a shared
-working directory for the bias-model stage: `03_prep_nonpeaks.sh` creates it and
-`04_chrombpnet_bias.sh` writes into it.
+Each script writes to `../../results/03_accessbpnet/<NN_name>/`. The exception is
+`03_chrombpnet_bias/`, shared by steps 03 and 04. `logs/` must exist before you submit.
 
-The `#SBATCH --output` directives require `logs/` to exist before submitting.
+Conda environments: `chrombpnet` for the model steps, `macs2` for peak calling, `access`
+for the rest. The scripts run `conda activate` but do not initialise conda, so your shell
+must do that first.
 
-### Paths that must be adapted
+Install the bundled ChromBPNet with `pip install -e chrombpnet/`.
 
-All paths are relative to a project root two levels above this directory, i.e. the layout
-assumed is `<project_root>/scripts/03_accessbpnet/`.
+The notebooks are committed without outputs. Step 11 needs an R kernel; the rest are
+Python.
 
-| Path | Provides |
-|---|---|
-| `../../results/01_process_access/02_filter/` | filtered ACCESS-ATAC BAMs, from pipeline 01 |
-| `../../data/GRCh38/GRCh38.primary_assembly.genome.fa` | reference genome |
-| `../../data/GRCh38/GRCh38.primary_assembly.chrom.sizes`, `core.chrom.sizes` | chromosome sizes |
-| `../../data/Blacklist/hg38-blacklist.v2.bed` | ENCODE hg38 blacklist v2 |
-| `../../data/Motifs/JASPAR2026_CORE_vertebrates_*` | JASPAR motifs (PFM and MEME formats) |
-| `../../data/Liver_caQTL/` | caQTL variants for the variant-scoring steps |
-| `../../data/encode_chipseq/K562/Bigwig/` | ENCODE ChIP-seq bigWig, used for track visualisation |
-| `~/rgtdata/hg38/gencode.v21.annotation.gtf` | gene annotation, read by `11_viz_tracks.ipynb` |
+## Paths to adapt
 
-`fold_0.json` in this directory defines the train / valid / test chromosome split.
+Paths assume this directory sits at `<project_root>/scripts/03_accessbpnet/`.
 
+- `../../results/01_process_access/02_filter/` — filtered ACCESS-ATAC BAMs, from pipeline 01
+- `../../data/GRCh38/` — genome FASTA and chrom sizes
+- `../../data/Blacklist/hg38-blacklist.v2.bed` — ENCODE hg38 blacklist v2
+- `../../data/Motifs/JASPAR2026_CORE_vertebrates_*` — JASPAR motifs, PFM and MEME formats
+- `../../data/Liver_caQTL/` — caQTL and background variants for the variant steps
+- `../../data/encode_chipseq/K562/Bigwig/` — ENCODE ChIP-seq bigWig, for track plots
+- `~/rgtdata/hg38/gencode.v21.annotation.gtf` — gene annotation, used by step 11
+- `../../github/variant-scorer/` — a separate repository, called by step 16
+
+`fold_0.json` in this directory holds the train/valid/test chromosome split.
+
+## Scripts
+
+### Inputs
+
+**`01_call_peaks.sh`** — MACS2 on the ACCESS-ATAC BAM
+(`--nomodel --nolambda --shift -100 --extsize 200 --keep-dup all -q 0.01`). Keeps chr1–22,
+X and Y, then removes blacklist regions. Currently loops over HepG2 only.
+
+**`02_bam2bw.sh`** — builds the two bigWigs with [`deamtools`](https://github.com/lzj1769/deamTools) `bam2bw`. Array job over
+2 samples × 2 events. `--event tn5` gives `{sample}_atac.bw`; the default gives
+`{sample}_access.bw`.
+
+### Model training
+
+**`03_prep_nonpeaks.sh`** — `chrombpnet prep nonpeaks`. Makes GC-matched background
+regions. These do not depend on the assay, so both models reuse them.
+
+**`04_chrombpnet_bias.sh`** — `chrombpnet bias pipeline`, once per assay. Array job over
+2 samples × 2 assays. Each assay needs its own bias model, because Tn5 and DddSs have
+different sequence bias.
+
+**`05_run_chrombpnet.sh`** — `chrombpnet pipeline`, once per assay. Takes the bias model
+from step 04. The output directory must not already exist.
+
+**`06_chrombpnet_contribs.sh`** — `chrombpnet contribs_bw`. Contribution scores over the
+peaks, from the bias-corrected model.
+
+**`07_eval_chrombpnet.ipynb`** — collects `chrombpnet_metrics.json` from each run into one
+table, so the four models can be compared.
+
+**`09_chrombpnet_pred.sh`** — `chrombpnet pred_bw`. Predicted signal tracks from the bias,
+full and bias-corrected models.
+
+### Motif discovery
+
+**`08_run_tfmodisco.sh`** — `modisco motifs` then `modisco report`. Array job over
+2 samples × 2 assays × {counts, profile} scores, 8 tasks. Matches discovered motifs
+against JASPAR.
+
+**`10_extract_tfmodisco.ipynb`** — reads the TF-MoDISco HDF5 files and pulls out each
+pattern's seqlet count, giving one table across all runs.
+
+**`11_viz_tracks.ipynb`** — genome browser tracks with `Gviz`. An **R** notebook.
+
+**`12_viz_contribution.ipynb`** — sequence logos of contribution scores, drawn with
+`logomaker`.
+
+### Marginal footprints
+
+**`13_prepare_pwm.ipynb`** — writes `motif_to_pwm.tsv` for a short list of representative
+TFs (CTCF, MAX, USF1, SP1 and others) from the JASPAR PFMs.
+
+**`14_marginal_footprint.sh`** — `chrombpnet footprints`. Array job over 2 samples ×
+2 assays × {corrected, uncorrected}, 8 tasks. `corrected` uses `chrombpnet_nobias.h5` and
+`uncorrected` uses `chrombpnet.h5`. Comparing the two shows how much bias was removed.
+
+**`20_viz_marginal_footprint.ipynb`** — plots the footprints from the HDF5 output.
+
+### Variant effects
+
+**`15_prepare_snp.ipynb`** — builds the variant list from the liver caQTL data. Splits
+`variant_id` into alleles and combines caQTL variants with background variants from
+non-caPeaks.
+
+**`16_variant_score_prediction.sh`** — scores each variant with `variant_scoring.py` from
+the external `variant-scorer` repository, using the bias-corrected HepG2 model. Array job
+over the two assays.
+
+**`17_eval_variant_score.ipynb`** — evaluates the scores. Takes the true label from the
+`variant_id` suffix and computes average precision from `abs_logfc`.
+
+**`18_eval_variant_score.ipynb`** — the same evaluation applied to an external ChromBPNet
+run, for comparison. Not part of this pipeline's chain.
+
+**`19_variant_effects_to_bw.ipynb`** — writes the per-variant effect sizes out as bigWig
+tracks.
 
 ## Using ChromBPNet
 
-`chrombpnet/` is a modified copy of
-[kundajelab/chrombpnet](https://github.com/kundajelab/chrombpnet); what was changed and
-why is documented in [`chrombpnet/README.md`](chrombpnet/README.md). This section covers
-how the pipeline uses it.
+Both readouts use the same commands. Only `-d` and the bigWig change:
 
-Install it from the bundled copy:
+- ATAC readout — `-d ATAC`, with `{sample}_atac.bw` (Tn5 counts)
+- ACCESS readout — `-d ACCESS`, with `{sample}_access.bw` (edit counts)
 
-```bash
-conda activate chrombpnet
-pip install -e chrombpnet/
-```
+Peaks, background regions and the fold split are shared. This keeps the two comparable.
 
-### Training on ACCESS and on ATAC
-
-Because ACCESS-ATAC yields two tracks from the same library, both are trained with the
-**same commands** — the only differences are `-d` and which bigWig is passed to `-ibw`:
-
-| | ATAC readout | ACCESS readout |
-|---|---|---|
-| bigWig | Tn5 insertion counts | deaminase edit counts |
-| `-d` | `ATAC` | `ACCESS` |
-
-Everything after the bigWig — peaks, background regions, fold split, and every downstream
-subcommand — is identical. That is deliberate: it makes the two readouts directly
-comparable, since any difference in the resulting models comes from the signal rather than
-from the processing.
-
-#### Step 0 — build the two bigWigs
-
-Done outside ChromBPNet, from the same BAM. In this repository that is
-[`../02_bam2bw.sh`](02_bam2bw.sh), which calls `deamtools bam2bw` twice per sample:
-`--event tn5` for the ATAC track and the default (edit) mode for the ACCESS track,
-producing `{sample}_atac.bw` and `{sample}_access.bw`.
-
-#### Step 1 — background regions (once per sample, shared by both assays)
+Background regions, once per sample:
 
 ```bash
 chrombpnet prep nonpeaks \
-    -g   genome.fa \
-    -p   peaks.narrowPeak \
-    -c   chrom.sizes \
-    -fl  fold_0.json \
-    -br  blacklist.bed \
-    -o   ${OUT}/nonpeaks
+    -g genome.fa -p peaks.narrowPeak -c chrom.sizes \
+    -fl fold_0.json -br blacklist.bed -o ${OUT}/nonpeaks
 ```
 
-GC-matched negatives do not depend on the assay, so this runs once and both models reuse
-`nonpeaks_negatives.bed`.
-
-#### Step 2 — bias model (once per assay)
+Bias model, once per assay:
 
 ```bash
-ASSAY=ACCESS                       # or ATAC
-BW=${sample}_access.bw             # or ${sample}_atac.bw
-
 chrombpnet bias pipeline \
-    -ibw ${BW} \
-    -d   ${ASSAY} \
-    -g   genome.fa \
-    -c   chrom.sizes \
-    -p   peaks.narrowPeak \
-    -n   ${OUT}/nonpeaks_negatives.bed \
-    -fl  fold_0.json \
-    -b   0.5 \
-    -o   ${OUT}/${ASSAY} \
-    -fp  ${sample}
+    -ibw ${BW} -d ${ASSAY} \
+    -g genome.fa -c chrom.sizes -p peaks.narrowPeak \
+    -n ${OUT}/nonpeaks_negatives.bed -fl fold_0.json \
+    -b 0.5 -o ${OUT}/${ASSAY} -fp ${sample}
 ```
 
-`-b 0.5` is the bias threshold factor. Each assay needs **its own** bias model: the
-enzymatic bias of Tn5 and of DddSs are different, which is exactly what `-d` selects the
-motifs for. See [`../04_chrombpnet_bias.sh`](04_chrombpnet_bias.sh).
-
-#### Step 3 — ChromBPNet model (once per assay)
+ChromBPNet model, once per assay. `-b` now takes the bias model from the step above:
 
 ```bash
 chrombpnet pipeline \
-    -ibw ${BW} \
-    -d   ${ASSAY} \
-    -g   genome.fa \
-    -c   chrom.sizes \
-    -p   peaks.narrowPeak \
-    -n   ${OUT}/nonpeaks_negatives.bed \
-    -fl  fold_0.json \
-    -b   ${BIAS_OUT}/${ASSAY}/models/${sample}_bias.h5 \
-    -o   ${OUT}/${ASSAY}
+    -ibw ${BW} -d ${ASSAY} \
+    -g genome.fa -c chrom.sizes -p peaks.narrowPeak \
+    -n ${OUT}/nonpeaks_negatives.bed -fl fold_0.json \
+    -b ${BIAS_OUT}/${ASSAY}/models/${sample}_bias.h5 \
+    -o ${OUT}/${ASSAY}
 ```
 
-`-b` now takes the bias model trained in step 2 for the *same* assay. The output directory
-must not already exist. See [`../05_run_chrombpnet.sh`](05_run_chrombpnet.sh).
-
-#### Step 4 onwards — identical for both assays
-
-These take a trained model and no longer need `-d` or a bigWig:
+Everything after this takes a trained model and needs no `-d`:
 
 ```bash
-# contribution scores
-chrombpnet contribs_bw -m models/chrombpnet_nobias.h5 \
-    -r peaks.narrowPeak -g genome.fa -c chrom.sizes -op ${PREFIX}
-
-# predicted signal tracks
-chrombpnet pred_bw -bm models/bias_model_scaled.h5 \
-    -cm models/chrombpnet.h5 -cmb models/chrombpnet_nobias.h5 \
-    -r peaks.narrowPeak -g genome.fa -c chrom.sizes -op ${PREFIX}
-
-# marginal footprints
-chrombpnet footprints -m models/chrombpnet_nobias.h5 \
-    -r nonpeaks_negatives.bed -g genome.fa -fl fold_0.json \
-    -op ${PREFIX} -pwm_f motif_to_pwm.tsv
+chrombpnet contribs_bw -m models/chrombpnet_nobias.h5 -r peaks.narrowPeak ...
+chrombpnet pred_bw -bm models/bias_model_scaled.h5 -cm models/chrombpnet.h5 ...
+chrombpnet footprints -m models/chrombpnet_nobias.h5 -r nonpeaks_negatives.bed ...
 ```
-
-Use `chrombpnet_nobias.h5` for the bias-corrected model and `chrombpnet.h5` for the
-uncorrected one; comparing the two marginal footprints shows how much enzymatic bias was
-removed. See [`../06_chrombpnet_contribs.sh`](06_chrombpnet_contribs.sh),
-[`../09_chrombpnet_pred.sh`](09_chrombpnet_pred.sh) and
-[`../14_marginal_footprint.sh`](14_marginal_footprint.sh).
-

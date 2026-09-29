@@ -79,8 +79,12 @@ kernel): `ArchR`, `Seurat`, `Signac`, `rtracklayer`, `BSgenome.Mmusculus.UCSC.mm
 
 External tools: `samtools`, `bedtools`, `deeptools`, `MACS2`, UCSC `wigToBigWig` and
 `bedGraphToBigWig`, [RGT](https://reg-gen.readthedocs.io/) for motif matching, and
-[Nextflow](https://www.nextflow.io/) for the alignment step of pipeline 04. The scripts
-also invoke `deamtools`, a separate command-line tool that is not part of this repository.
+[Nextflow](https://www.nextflow.io/) for the alignment step of pipeline 04.
+
+Pipelines 01 and 03 build their signal tracks with `deamtools bam2bw`.
+[**deamTools**](https://github.com/lzj1769/deamTools) is a separate tool for deaminase-based
+assays, developed alongside this work and still under active development
+([docs](https://lzj1769.github.io/deamTools/)).
 
 Training the TFBS classifier (`02_tfbs_prediction/04_train.sh`) and the ChromBPNet models
 in `03_accessbpnet/` require a CUDA device.

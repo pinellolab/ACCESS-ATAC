@@ -4,15 +4,15 @@
 #SBATCH --error=logs/10_call_peaks.err
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
-#SBATCH --time=120:00:00        # 加长,防止超时
+#SBATCH --time=120:00:00        # long, to avoid timing out
 
 set -euo pipefail
 
 conda activate macs2
 module load bedtools/2.31.1
 
-THREADS=16                     # 和 cpus-per-task 一致
-SORT_MEM=32G                   # 降下来,32G 足够且安全
+THREADS=16                     # keep in sync with cpus-per-task
+SORT_MEM=32G                   # lowered; 32G is enough and safe
 
 IN_DIR=../../results/01_process_access/05_subsample   # already downsampled BAMs
 OUT_DIR=../../results/01_process_access/10_call_peaks

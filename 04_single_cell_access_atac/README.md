@@ -49,15 +49,3 @@ environment:
 | `../../github/nf-core-accessatacseq/` | the Nextflow pipeline run by step 01, a separate repository |
 
 `samples.csv` lists the input FASTQ pairs by absolute path and needs the same treatment.
-
-## Notes
-
-- Unlike the other pipelines here, the notebooks are committed **with their outputs** —
-  UMAPs, marker plots and trajectory figures are kept as a record of the analysis. As a
-  consequence some outputs contain absolute cluster paths printed by ArchR.
-- Large working files are excluded from the repository by `.gitignore` and must be
-  regenerated locally: `mouse.arrow` (the ArchR arrow file, ~500 MB, rebuilt by
-  `10_create_archr_project.ipynb`), plus `ArchRLogs/`, `QualityControl/`, `tmp/`,
-  `32_plot_footprint.log` and `clustermap.png` / `.pdf`.
-- There are three ArchR project-creation notebooks (`10`, `13`, `35`) and two
-  Seurat/marker passes (`11`–`12` and `14`–`15`), reflecting successive re-analyses.

@@ -17,9 +17,9 @@ comparison is what most of this repository does.
        width="100%">
 </p>
 
-The left panel is the assay: Tn5 and the DddSs deaminase act on open chromatin in the same
+The top panel is the assay: Tn5 and the DddSs deaminase act on open chromatin in the same
 reaction, Tn5 fragmenting the DNA and the deaminase converting exposed cytosines, so one
-library carries both readouts. The right panel is the downstream analysis, covered here by
+library carries both readouts. The bottom panel is the downstream analysis, covered here by
 `01_process_access/` (genome-wide accessibility and TF footprinting),
 `03_accessbpnet/` (sequence-to-function modelling, the ACCESSBPNet panel) and
 `04_single_cell_access_atac/` (the single-cell panel). `02_tfbs_prediction/` is not
@@ -35,7 +35,7 @@ to run it and which paths need adapting.
 | [`01_process_access/`](01_process_access/README.md) | Concurrent ACCESS-ATAC in HepG2 and K562: QC, filtering, depth matching, signal tracks, peak calling and TF footprint quantification, compared against ENCODE ATAC-seq. **Start here.** |
 | [`02_tfbs_prediction/`](02_tfbs_prediction/README.md) | Benchmark of TF binding site prediction from ACCESS-ATAC signal versus sequence alone. Builds the training data, trains a CNN classifier and evaluates it. |
 | [`03_accessbpnet/`](03_accessbpnet/README.md) | ChromBPNet applied to ACCESS-ATAC: bias model, ChromBPNet model, contribution scores, TF-MoDISco, marginal footprints and variant effect prediction. |
-| [`04_single_cell_access_atac/`](04_single_cell_access_atac/README.md) | Single-cell ACCESS-ATAC in mouse airway cells: barcode correction, fragment generation, clustering and annotation (ArchR / Seurat), trajectory analysis and TF footprinting. |
+| [`04_single_cell_access_atac/`](04_single_cell_access_atac/README.md) | Single-cell ACCESS-ATAC in mouse airway cells: barcode correction, fragment generation, clustering and annotation (ArchR / Seurat), and TF footprinting. |
 
 ## Reproducing the analysis
 
